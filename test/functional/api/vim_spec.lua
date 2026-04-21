@@ -1921,6 +1921,47 @@ describe('API', function()
       )
     end)
 
+    it('nvim_get_option_value tabpage cmdheight #31140', function()
+      api.nvim_set_option_value('cmdheight', 1, {})
+      eq(1, api.nvim_get_option_value('cmdheight', { tab = 0 }))
+      eq(1, api.nvim_get_option_value('cmdheight', {}))
+      command('tabnew')
+      api.nvim_set_option_value('cmdheight', 4, {})
+      local tab2 = api.nvim_get_current_tabpage()
+      command('tabprevious')
+      local tab1 = api.nvim_get_current_tabpage()
+      eq(1, api.nvim_get_option_value('cmdheight', { tab = tab1 }))
+      eq(4, api.nvim_get_option_value('cmdheight', { tab = tab2 }))
+      eq(1, api.nvim_get_option_value('cmdheight', {}))
+      matches(
+        "cannot use 'tab' with 'win' or 'buf'",
+        pcall_err(
+          api.nvim_get_option_value,
+          'cmdheight',
+          { tab = tab1, win = api.nvim_get_current_win() }
+        )
+      )
+      matches(
+        "cannot use 'tab' with 'scope'",
+        pcall_err(api.nvim_get_option_value, 'cmdheight', {
+          tab = tab1,
+          scope = 'local',
+        })
+      )
+      eq(
+        "'tab' can only be used with option 'cmdheight'",
+        pcall_err(api.nvim_get_option_value, 'shiftwidth', { tab = tab1 })
+      )
+      eq(
+        "'tab' is not supported for nvim_set_option_value",
+        pcall_err(api.nvim_set_option_value, 'cmdheight', 2, { tab = tab1 })
+      )
+      eq(
+        "'tab' is not supported for nvim_get_option_info2",
+        pcall_err(api.nvim_get_option_info2, 'cmdheight', { tab = tab1 })
+      )
+    end)
+
     it('can get local values when global value is set', function()
       eq(0, api.nvim_get_option_value('scrolloff', {}))
       eq(-1, api.nvim_get_option_value('scrolloff', { scope = 'local' }))

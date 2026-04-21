@@ -17,6 +17,7 @@
 #include "nvim/memory.h"
 #include "nvim/memory_defs.h"
 #include "nvim/option.h"
+#include "nvim/option_vars.h"
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
@@ -25,9 +26,44 @@
 
 static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *opt_idxp,
                                       int *opt_flags, OptScope *scope, void **from, char **filetype,
-                                      Error *err)
+                                      bool allow_tab, tabpage_T **opt_tabp, Error *err)
 {
 #define HAS_KEY_X(d, v) HAS_KEY(d, option, v)
+  assert(opt_tabp != NULL);
+  *opt_tabp = NULL;
+
+  // Validate incompatible argument combinations first, then resolve handles and scope.
+  if (HAS_KEY_X(opts, filetype)) {
+    VALIDATE(!(HAS_KEY_X(opts, buf) || HAS_KEY_X(opts, scope) || HAS_KEY_X(opts, win)
+               || HAS_KEY_X(opts, tab)),
+             "%s", "cannot use 'filetype' with 'scope', 'buf', 'win' or 'tab'", {
+      return FAIL;
+    });
+  }
+
+  if (HAS_KEY_X(opts, tab)) {
+    if (!allow_tab) {
+      api_set_error(err, kErrorTypeValidation, "'tab' is not supported");
+      return FAIL;
+    }
+    // Keep the more specific (and tested) error messages for conflicting args.
+    VALIDATE(!(HAS_KEY_X(opts, win) || HAS_KEY_X(opts, buf)), "%s",
+             "cannot use 'tab' with 'win' or 'buf'", {
+      return FAIL;
+    });
+    VALIDATE(!HAS_KEY_X(opts, filetype), "%s", "cannot use 'tab' with 'filetype'", {
+      return FAIL;
+    });
+    VALIDATE(!HAS_KEY_X(opts, scope), "%s", "cannot use 'tab' with 'scope'", {
+      return FAIL;
+    });
+  }
+
+  VALIDATE(!(HAS_KEY_X(opts, win) && HAS_KEY_X(opts, buf)), "%s", "cannot use both 'buf' and 'win'",
+  {
+    return FAIL;
+  });
+
   if (HAS_KEY_X(opts, scope)) {
     if (!strcmp(opts->scope.data, "local")) {
       *opt_flags = OPT_LOCAL;
@@ -67,23 +103,27 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
     }
   }
 
-  VALIDATE((!HAS_KEY_X(opts, filetype)
-            || !(HAS_KEY_X(opts, buf) || HAS_KEY_X(opts, scope) || HAS_KEY_X(opts, win))),
-           "%s", "cannot use 'filetype' with 'scope', 'buf' or 'win'", {
-    return FAIL;
-  });
-
-  VALIDATE((!HAS_KEY_X(opts, win) || !HAS_KEY_X(opts, buf)),
-           "%s", "cannot use both 'buf' and 'win'", {
-    return FAIL;
-  });
+  if (HAS_KEY_X(opts, tab)) {
+    *opt_tabp = find_tab_by_handle(opts->tab, err);
+    if (ERROR_SET(err)) {
+      return FAIL;
+    }
+  }
 
   *opt_idxp = find_option(name);
   if (*opt_idxp == kOptInvalid) {
     // unknown option
     api_set_error(err, kErrorTypeValidation, "Unknown option '%s'", name);
-  } else if (*scope == kOptScopeBuf || *scope == kOptScopeWin) {
-    // if 'buf' or 'win' is passed, make sure the option supports it
+    return FAIL;
+  }
+
+  if (*opt_tabp != NULL && *opt_idxp != kOptCmdheight) {
+    api_set_error(err, kErrorTypeValidation, "'tab' can only be used with option 'cmdheight'");
+    return FAIL;
+  }
+
+  // If 'buf' or 'win' is passed, make sure the option supports it.
+  if (*scope == kOptScopeBuf || *scope == kOptScopeWin) {
     if (!option_has_scope(*opt_idxp, *scope)) {
       char *tgt = *scope == kOptScopeBuf ? "buf" : "win";
       char *global = option_has_scope(*opt_idxp, kOptScopeGlobal) ? "global " : "";
@@ -93,6 +133,7 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
 
       api_set_error(err, kErrorTypeValidation, "'%s' cannot be passed for %s%soption '%s'",
                     tgt, global, req, name);
+      return FAIL;
     }
   }
 
@@ -188,6 +229,9 @@ static void wipe_ft_buf(buf_T *buf)
 /// @param opts      Optional parameters
 ///                  - buf: Buffer number. Used for getting buffer local options.
 ///                         Implies {scope} is "local".
+///                  - tab: |tab-ID| for tab-local options. Currently only
+///                    supports "cmdheight". Cannot be used with "scope", "win",
+///                    "buf", or "filetype". Tabpage `0` means the current tabpage.
 ///                  - filetype: |filetype|. Used to get the default option for a
 ///                    specific filetype. Cannot be used with any other option.
 ///                    Note: this will trigger |ftplugin| and all |FileType|
@@ -205,10 +249,16 @@ Object nvim_get_option_value(String name, Dict(option) *opts, Error *err)
   OptScope scope = kOptScopeGlobal;
   void *from = NULL;
   char *filetype = NULL;
+  tabpage_T *opt_tab = NULL;
 
   if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &from,
-                                  &filetype, err)) {
+                                  &filetype, true, &opt_tab, err)) {
     return (Object)OBJECT_INIT;
+  }
+
+  if (opt_tab != NULL) {
+    const OptInt ch = opt_tab == curtab ? p_ch : opt_tab->tp_ch_used;
+    return optval_as_object(NUMBER_OPTVAL(ch));
   }
 
   aco_save_T aco;
@@ -273,12 +323,18 @@ void nvim_set_option_value(uint64_t channel_id, String name, Object value, Dict(
                            Error *err)
   FUNC_API_SINCE(9)
 {
+  if (opts && HAS_KEY(opts, option, tab)) {
+    api_set_error(err, kErrorTypeValidation, "'tab' is not supported for nvim_set_option_value");
+    return;
+  }
+
   OptIndex opt_idx = 0;
   int opt_flags = 0;
   OptScope scope = kOptScopeGlobal;
   void *to = NULL;
-  if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &to, NULL,
-                                  err)) {
+  tabpage_T *opt_tab = NULL;
+  if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &to, NULL, false,
+                                  &opt_tab, err)) {
     return;
   }
 
@@ -361,12 +417,18 @@ DictAs(get_option_info) nvim_get_option_info2(String name, Dict(option) *opts, A
                                               Error *err)
   FUNC_API_SINCE(11)
 {
+  if (opts && HAS_KEY(opts, option, tab)) {
+    api_set_error(err, kErrorTypeValidation, "'tab' is not supported for nvim_get_option_info2");
+    return (Dict)ARRAY_DICT_INIT;
+  }
+
   OptIndex opt_idx = 0;
   int opt_flags = 0;
   OptScope scope = kOptScopeGlobal;
   void *from = NULL;
+  tabpage_T *opt_tab = NULL;
   if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &from, NULL,
-                                  err)) {
+                                  false, &opt_tab, err)) {
     return (Dict)ARRAY_DICT_INIT;
   }
 

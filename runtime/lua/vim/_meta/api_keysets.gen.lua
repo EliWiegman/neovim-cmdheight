@@ -377,6 +377,7 @@ error('Cannot require a meta file')
 
 --- @class vim.api.keyset.option
 --- @field buf? integer
+--- @field tab? integer
 --- @field filetype? string
 --- @field scope? string
 --- @field win? integer

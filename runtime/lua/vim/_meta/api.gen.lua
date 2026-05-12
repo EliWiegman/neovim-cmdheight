@@ -1546,15 +1546,15 @@ function vim.api.nvim_get_option_info2(name, opts) end
 --- @param opts vim.api.keyset.option Optional parameters
 --- - buf: Buffer number. Used for getting buffer local options.
 ---        Implies {scope} is "local".
---- - tab: `tab-ID` for tab-local options. Currently only
----   supports "cmdheight". Cannot be used with "scope", "win",
----   "buf", or "filetype". Tabpage `0` means the current tabpage.
 --- - filetype: `filetype`. Used to get the default option for a
 ---   specific filetype. Cannot be used with any other option.
 ---   Note: this will trigger `ftplugin` and all `FileType`
 ---   autocommands for the corresponding filetype.
 --- - scope: One of "global" or "local". Analogous to
 --- `:setglobal` and `:setlocal`, respectively.
+--- - tab: `tab-ID` for tab-local options. Currently only
+---   supports "cmdheight". Cannot be used with "scope", "win",
+---   "buf", or "filetype". Tabpage `0` means the current tabpage.
 --- - win: `window-ID`. Used for getting window local options.
 --- @return any # Option value
 function vim.api.nvim_get_option_value(name, opts) end

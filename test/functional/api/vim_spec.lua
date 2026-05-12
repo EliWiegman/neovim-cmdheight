@@ -1922,7 +1922,7 @@ describe('API', function()
       )
     end)
 
-    it('nvim_get_option_value tabpage cmdheight #31140', function()
+    it("tabpage-local 'cmdheight' #31140", function()
       api.nvim_set_option_value('cmdheight', 1, {})
       eq(1, api.nvim_get_option_value('cmdheight', { tab = 0 }))
       eq(1, api.nvim_get_option_value('cmdheight', {}))
@@ -1934,16 +1934,16 @@ describe('API', function()
       eq(1, api.nvim_get_option_value('cmdheight', { tab = tab1 }))
       eq(4, api.nvim_get_option_value('cmdheight', { tab = tab2 }))
       eq(1, api.nvim_get_option_value('cmdheight', {}))
-      matches(
-        "cannot use 'tab' with 'win' or 'buf'",
+      eq(
+        "Conflict: 'tab' not allowed with 'win'",
         pcall_err(
           api.nvim_get_option_value,
           'cmdheight',
           { tab = tab1, win = api.nvim_get_current_win() }
         )
       )
-      matches(
-        "cannot use 'tab' with 'scope'",
+      eq(
+        "Conflict: 'tab' not allowed with 'scope'",
         pcall_err(api.nvim_get_option_value, 'cmdheight', {
           tab = tab1,
           scope = 'local',

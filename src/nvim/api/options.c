@@ -34,9 +34,16 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
 
   // Validate incompatible argument combinations first, then resolve handles and scope.
   if (HAS_KEY_X(opts, filetype)) {
-    VALIDATE(!(HAS_KEY_X(opts, buf) || HAS_KEY_X(opts, scope) || HAS_KEY_X(opts, win)
-               || HAS_KEY_X(opts, tab)),
-             "%s", "cannot use 'filetype' with 'scope', 'buf', 'win' or 'tab'", {
+    VALIDATE_CON(!HAS_KEY_X(opts, buf), "filetype", "buf", {
+      return FAIL;
+    });
+    VALIDATE_CON(!HAS_KEY_X(opts, scope), "filetype", "scope", {
+      return FAIL;
+    });
+    VALIDATE_CON(!HAS_KEY_X(opts, win), "filetype", "win", {
+      return FAIL;
+    });
+    VALIDATE_CON(!HAS_KEY_X(opts, tab), "filetype", "tab", {
       return FAIL;
     });
   }
@@ -46,21 +53,21 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
       api_set_error(err, kErrorTypeValidation, "'tab' is not supported");
       return FAIL;
     }
-    // Keep the more specific (and tested) error messages for conflicting args.
-    VALIDATE(!(HAS_KEY_X(opts, win) || HAS_KEY_X(opts, buf)), "%s",
-             "cannot use 'tab' with 'win' or 'buf'", {
+    VALIDATE_CON(!HAS_KEY_X(opts, win), "tab", "win", {
       return FAIL;
     });
-    VALIDATE(!HAS_KEY_X(opts, filetype), "%s", "cannot use 'tab' with 'filetype'", {
+    VALIDATE_CON(!HAS_KEY_X(opts, buf), "tab", "buf", {
       return FAIL;
     });
-    VALIDATE(!HAS_KEY_X(opts, scope), "%s", "cannot use 'tab' with 'scope'", {
+    VALIDATE_CON(!HAS_KEY_X(opts, filetype), "tab", "filetype", {
+      return FAIL;
+    });
+    VALIDATE_CON(!HAS_KEY_X(opts, scope), "tab", "scope", {
       return FAIL;
     });
   }
 
-  VALIDATE(!(HAS_KEY_X(opts, win) && HAS_KEY_X(opts, buf)), "%s", "cannot use both 'buf' and 'win'",
-  {
+  VALIDATE_CON(!(HAS_KEY_X(opts, win) && HAS_KEY_X(opts, buf)), "buf", "win", {
     return FAIL;
   });
 
@@ -91,8 +98,7 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
   }
 
   if (HAS_KEY_X(opts, buf)) {
-    VALIDATE(!(HAS_KEY_X(opts, scope) && *opt_flags == OPT_GLOBAL), "%s",
-             "cannot use both global 'scope' and 'buf'", {
+    VALIDATE_CON(!(HAS_KEY_X(opts, scope) && *opt_flags == OPT_GLOBAL), "buf", "global scope", {
       return FAIL;
     });
     *opt_flags = OPT_LOCAL;
@@ -229,15 +235,15 @@ static void wipe_ft_buf(buf_T *buf)
 /// @param opts      Optional parameters
 ///                  - buf: Buffer number. Used for getting buffer local options.
 ///                         Implies {scope} is "local".
-///                  - tab: |tab-ID| for tab-local options. Currently only
-///                    supports "cmdheight". Cannot be used with "scope", "win",
-///                    "buf", or "filetype". Tabpage `0` means the current tabpage.
 ///                  - filetype: |filetype|. Used to get the default option for a
 ///                    specific filetype. Cannot be used with any other option.
 ///                    Note: this will trigger |ftplugin| and all |FileType|
 ///                    autocommands for the corresponding filetype.
 ///                  - scope: One of "global" or "local". Analogous to
 ///                  |:setglobal| and |:setlocal|, respectively.
+///                  - tab: |tab-ID| for tab-local options. Currently only
+///                    supports "cmdheight". Cannot be used with "scope", "win",
+///                    "buf", or "filetype". Tabpage `0` means the current tabpage.
 ///                  - win: |window-ID|. Used for getting window local options.
 /// @param[out] err  Error details, if any
 /// @return          Option value

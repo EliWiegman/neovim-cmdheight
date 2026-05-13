@@ -1920,22 +1920,9 @@ describe('API', function()
         'Invalid value for option \'scrolloff\': expected number, got string "wrong"',
         pcall_err(api.nvim_set_option_value, 'scrolloff', 'wrong', {})
       )
-    end)
-
-    it("tabpage-local 'cmdheight' #31140", function()
-      api.nvim_set_option_value('cmdheight', 1, {})
-      eq(1, api.nvim_get_option_value('cmdheight', { tab = 0 }))
-      eq(1, api.nvim_get_option_value('cmdheight', {}))
-      command('tabnew')
-      api.nvim_set_option_value('cmdheight', 4, {})
-      local tab2 = api.nvim_get_current_tabpage()
-      command('tabprevious')
       local tab1 = api.nvim_get_current_tabpage()
-      eq(1, api.nvim_get_option_value('cmdheight', { tab = tab1 }))
-      eq(4, api.nvim_get_option_value('cmdheight', { tab = tab2 }))
-      eq(1, api.nvim_get_option_value('cmdheight', {}))
       eq(
-        "Conflict: 'tab' not allowed with 'win'",
+        "Conflict: 'tab' not allowed with 'win', 'buf', 'filetype' or 'scope'",
         pcall_err(
           api.nvim_get_option_value,
           'cmdheight',
@@ -1943,7 +1930,7 @@ describe('API', function()
         )
       )
       eq(
-        "Conflict: 'tab' not allowed with 'scope'",
+        "Conflict: 'tab' not allowed with 'win', 'buf', 'filetype' or 'scope'",
         pcall_err(api.nvim_get_option_value, 'cmdheight', {
           tab = tab1,
           scope = 'local',
@@ -1954,13 +1941,31 @@ describe('API', function()
         pcall_err(api.nvim_get_option_value, 'shiftwidth', { tab = tab1 })
       )
       eq(
-        "'tab' is not supported for nvim_set_option_value",
+        "Conflict: 'tab' not allowed with 'nvim_set_option_value'",
         pcall_err(api.nvim_set_option_value, 'cmdheight', 2, { tab = tab1 })
       )
       eq(
-        "'tab' is not supported for nvim_get_option_info2",
+        "Conflict: 'tab' not allowed with 'nvim_get_option_info2'",
         pcall_err(api.nvim_get_option_info2, 'cmdheight', { tab = tab1 })
       )
+      eq(
+        "Conflict: 'filetype' not allowed with 'scope', 'buf', 'win' or 'tab'",
+        pcall_err(api.nvim_get_option_value, 'cmdheight', { filetype = 'c', tab = 0 })
+      )
+    end)
+
+    it("tabpage-local 'cmdheight' #31140", function()
+      api.nvim_set_option_value('cmdheight', 1, {})
+      local tab1 = api.nvim_get_current_tabpage()
+      eq(1, api.nvim_get_option_value('cmdheight', { tab = 0 }))
+      eq(1, api.nvim_get_option_value('cmdheight', { tab = tab1 }))
+      eq(1, api.nvim_get_option_value('cmdheight', {}))
+      command('tabnew')
+      local tab2 = api.nvim_get_current_tabpage()
+      api.nvim_set_option_value('cmdheight', 4, {})
+      eq(4, api.nvim_get_option_value('cmdheight', { tab = tab2 }))
+      eq(1, api.nvim_get_option_value('cmdheight', { tab = tab1 }))
+      eq(4, api.nvim_get_option_value('cmdheight', {}))
     end)
 
     it('can get local values when global value is set', function()

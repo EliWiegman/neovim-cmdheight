@@ -26,7 +26,7 @@
 
 static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *opt_idxp,
                                       int *opt_flags, OptScope *scope, void **from, char **filetype,
-                                      bool allow_tab, tabpage_T **opt_tabp, Error *err)
+                                      tabpage_T **opt_tabp, Error *err)
 {
 #define HAS_KEY_X(d, v) HAS_KEY(d, option, v)
   assert(opt_tabp != NULL);
@@ -34,35 +34,17 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
 
   // Validate incompatible argument combinations first, then resolve handles and scope.
   if (HAS_KEY_X(opts, filetype)) {
-    VALIDATE_CON(!HAS_KEY_X(opts, buf), "filetype", "buf", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, scope), "filetype", "scope", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, win), "filetype", "win", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, tab), "filetype", "tab", {
+    VALIDATE_CON(!HAS_KEY_X(opts, scope) && !HAS_KEY_X(opts, buf)
+             && !HAS_KEY_X(opts, win) && !HAS_KEY_X(opts, tab),
+             "filetype", "'scope', 'buf', 'win' or 'tab'", {
       return FAIL;
     });
   }
 
   if (HAS_KEY_X(opts, tab)) {
-    if (!allow_tab) {
-      api_set_error(err, kErrorTypeValidation, "'tab' is not supported");
-      return FAIL;
-    }
-    VALIDATE_CON(!HAS_KEY_X(opts, win), "tab", "win", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, buf), "tab", "buf", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, filetype), "tab", "filetype", {
-      return FAIL;
-    });
-    VALIDATE_CON(!HAS_KEY_X(opts, scope), "tab", "scope", {
+    VALIDATE_CON(!HAS_KEY_X(opts, win) && !HAS_KEY_X(opts, buf)
+             && !HAS_KEY_X(opts, filetype) && !HAS_KEY_X(opts, scope),
+             "tab", "'win', 'buf', 'filetype' or 'scope'", {
       return FAIL;
     });
   }
@@ -242,8 +224,7 @@ static void wipe_ft_buf(buf_T *buf)
 ///                  - scope: One of "global" or "local". Analogous to
 ///                  |:setglobal| and |:setlocal|, respectively.
 ///                  - tab: |tab-ID| for tab-local options. Currently only
-///                    supports "cmdheight". Cannot be used with "scope", "win",
-///                    "buf", or "filetype". Tabpage `0` means the current tabpage.
+///                    supports "cmdheight". Tabpage `0` means the current tabpage.
 ///                  - win: |window-ID|. Used for getting window local options.
 /// @param[out] err  Error details, if any
 /// @return          Option value
@@ -258,7 +239,7 @@ Object nvim_get_option_value(String name, Dict(option) *opts, Error *err)
   tabpage_T *opt_tab = NULL;
 
   if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &from,
-                                  &filetype, true, &opt_tab, err)) {
+                                  &filetype, &opt_tab, err)) {
     return (Object)OBJECT_INIT;
   }
 
@@ -329,17 +310,18 @@ void nvim_set_option_value(uint64_t channel_id, String name, Object value, Dict(
                            Error *err)
   FUNC_API_SINCE(9)
 {
-  if (opts && HAS_KEY(opts, option, tab)) {
-    api_set_error(err, kErrorTypeValidation, "'tab' is not supported for nvim_set_option_value");
+  // TODO(EliWiegman): support tab-local option setting (only nvim_get_option_value supports `tab`).
+  VALIDATE_CON(!(opts && HAS_KEY(opts, option, tab)),
+               "tab", "nvim_set_option_value", {
     return;
-  }
+  });
 
   OptIndex opt_idx = 0;
   int opt_flags = 0;
   OptScope scope = kOptScopeGlobal;
   void *to = NULL;
   tabpage_T *opt_tab = NULL;
-  if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &to, NULL, false,
+  if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &to, NULL,
                                   &opt_tab, err)) {
     return;
   }
@@ -423,10 +405,10 @@ DictAs(get_option_info) nvim_get_option_info2(String name, Dict(option) *opts, A
                                               Error *err)
   FUNC_API_SINCE(11)
 {
-  if (opts && HAS_KEY(opts, option, tab)) {
-    api_set_error(err, kErrorTypeValidation, "'tab' is not supported for nvim_get_option_info2");
+  VALIDATE_CON(!(opts && HAS_KEY(opts, option, tab)),
+               "tab", "nvim_get_option_info2", {
     return (Dict)ARRAY_DICT_INIT;
-  }
+  });
 
   OptIndex opt_idx = 0;
   int opt_flags = 0;
@@ -434,7 +416,7 @@ DictAs(get_option_info) nvim_get_option_info2(String name, Dict(option) *opts, A
   void *from = NULL;
   tabpage_T *opt_tab = NULL;
   if (!validate_option_value_args(opts, name.data, &opt_idx, &opt_flags, &scope, &from, NULL,
-                                  false, &opt_tab, err)) {
+                                  &opt_tab, err)) {
     return (Dict)ARRAY_DICT_INIT;
   }
 

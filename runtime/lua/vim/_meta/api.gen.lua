@@ -1553,8 +1553,7 @@ function vim.api.nvim_get_option_info2(name, opts) end
 --- - scope: One of "global" or "local". Analogous to
 --- `:setglobal` and `:setlocal`, respectively.
 --- - tab: `tab-ID` for tab-local options. Currently only
----   supports "cmdheight". Cannot be used with "scope", "win",
----   "buf", or "filetype". Tabpage `0` means the current tabpage.
+---   supports "cmdheight". Tabpage `0` means the current tabpage.
 --- - win: `window-ID`. Used for getting window local options.
 --- @return any # Option value
 function vim.api.nvim_get_option_value(name, opts) end

@@ -35,16 +35,16 @@ static int validate_option_value_args(Dict(option) *opts, char *name, OptIndex *
   // Validate incompatible argument combinations first, then resolve handles and scope.
   if (HAS_KEY_X(opts, filetype)) {
     VALIDATE_CON(!HAS_KEY_X(opts, scope) && !HAS_KEY_X(opts, buf)
-             && !HAS_KEY_X(opts, win) && !HAS_KEY_X(opts, tab),
-             "filetype", "'scope', 'buf', 'win' or 'tab'", {
+                 && !HAS_KEY_X(opts, win) && !HAS_KEY_X(opts, tab),
+                 "filetype", "'scope', 'buf', 'win' or 'tab'", {
       return FAIL;
     });
   }
 
   if (HAS_KEY_X(opts, tab)) {
     VALIDATE_CON(!HAS_KEY_X(opts, win) && !HAS_KEY_X(opts, buf)
-             && !HAS_KEY_X(opts, filetype) && !HAS_KEY_X(opts, scope),
-             "tab", "'win', 'buf', 'filetype' or 'scope'", {
+                 && !HAS_KEY_X(opts, filetype) && !HAS_KEY_X(opts, scope),
+                 "tab", "'win', 'buf', 'filetype' or 'scope'", {
       return FAIL;
     });
   }
